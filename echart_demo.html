@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<title>Echarts 法律黑客松樹狀圖</title>
+	<meta content='width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no' name='viewport' />
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+	<link href='https://cdn.jsdelivr.net/npm/bootstrap@3.3.7/dist/css/bootstrap.min.css' media='all' rel='stylesheet'
+		type='text/css' />
+	<style>
+		* {
+			padding: 0;
+			margin: 0;
+		}
+		
+		/*右鍵選單的格式*/
+		.menu {
+			position: absolute;
+			background: #fff;
+			border-radius: 5px;
+			left: -99999px;
+			top: -999999px;
+			z-index: 1;
+		}
+
+		.menu ul {
+			list-style: none
+		}
+
+		.menu ul li {
+			padding: 5px 10px;
+			color: #000;
+			border-bottom: 1px dashed #000;
+			font-size: 17px;
+		}
+
+		.menu ul li:last-child {
+			border-bottom: none;
+		}
+	</style>
+</head>
+
+<body class='black'>
+	<div id='wrapper'>
+		<section id='content'>
+			<div class="nav-part">
+				<div class="cur-position risk">
+					法律黑客松樹狀圖
+				</div>
+			</div>
+			<div class="container-fluid">
+				<div class="querycontext">
+				</div>
+			</div>
+			<div class="tree-container">
+				<div id="main" style="width:100%;height:1000px;"></div>
+			</div>
+		</section>
+	</div>
+	<!--右鍵選單的按鈕-->
+	<div id="rightMenu" class="menu" style="display:none;">
+		<ul>
+			<li onclick="editModelNode()">修改節點</li>
+			<li onclick="addModelNode()">增加子節點</li>
+			<li onclick="deleteModelNode('1')">刪除當前節點</li>
+			<li onclick="deleteModelNode('2')">刪除子節點</li>
+		</ul>
+	</div>
+</body>
+<script src='https://code.jquery.com/jquery-3.6.0.js' type='text/javascript'></script>
+<script src='https://cdn.staticfile.org/echarts/5.1.0/echarts.js' type='text/javascript'></script>
+<script type="text/javascript">
+	var chartDom = document.getElementById('main');
+	var myChart = echarts.init(chartDom);//
+	var option;
+	var data1;
+	myChart.showLoading();
+	$.getJSON('flare.json', {}, function (data) {
+		console.log(data);
+		data1 = data;
+		myChart.hideLoading();
+		data.collapsed = false;
+		data.children.forEach(function (datum, index) {
+			datum.collapsed = true
+		});
+		option = {
+			// 用tooltip實作備註(翻譯)功能
+			tooltip: {
+				show: true,
+				trigger: 'item',
+				triggerOn: 'mousemove',
+				textStyle: {
+					color: "#000", //備註說明文字的顏色
+					fontSize: 24	//備註說明文字的size
+				},
+				extraCssText: 'width:300px;white-space:pre-wrap;',
+				formatter: function (params, ticket, callback) {
+					var tsxx = params.data.describes == "" || params.data.describes == null ? params.data.name : params.data.describes;
+					return tsxx;
+				}
+			},
+			series: [
+				{
+					type: 'tree',
+					edgeShape: 'polyline',
+					data: [data],
+					top: '1%',
+					left: '7%',
+					bottom: '1%',
+					right: '20%',
+					symbol: 'image',
+					itemStyle: {
+					},
+					lineStyle: {
+						color: '#91cd75', //線的顏色
+					},
+					label: {
+						position: 'left',
+						verticalAlign: 'middle',
+						align: 'right',
+						fontSize: 18,
+						lineHeight: 24,
+						formatter: function (params) {
+							//console.log(params)
+							if (params.data.level === 1) {
+								return '{a|' + params.name + '}'
+							} else if (params.data.level === 2) {
+								return '{b|' + params.name + '}'
+							} else if (params.data.level === 3) {
+								return '{c|' + params.name + '}'
+							} else {
+								return '{d|' + params.name + '}'
+							}
+						},
+						// 利用RTF格式標籤實作節點字體大小自適應與節點格式客製化
+						rich: {
+							a: {
+								fontSize: 24,
+								padding: 6,
+								borderRadius: 3,
+								color: '#fff',
+								backgroundColor: '#546fc6'
+							},
+							b: {
+								fontSize: 24,
+								padding: 6,
+								borderRadius: 3,
+								color: '#fff',
+								backgroundColor: '#7ab1a6'
+							},
+							c: {
+								fontSize: 24,
+								padding: 6,
+								borderRadius: 3,
+								color: '#fff',
+								backgroundColor: '#bec985'
+							},
+							d: {
+								fontSize: 24,
+								padding: 6,
+								borderRadius: 3,
+								color: '#fff',
+								backgroundColor: '#fed360'
+							}
+						}
+					},
+					leaves: {
+						label: {
+							position: 'right',
+							verticalAlign: 'middle',
+							align: 'left'
+						}
+					},
+					emphasis: {
+						focus: 'descendant'
+					},
+					edgeForkPosition: "50%",
+					roam: true, // 滑鼠縮放
+					c: true,
+					animationDuration: 550,
+					animationDurationUpdate: 750
+				}
+			]
+		};
+		myChart.setOption(option);
+
+		// 網頁大小與樹狀圖自適應
+		const nodes = myChart._chartsViews[0]._data._graphicEls;
+		let allNode = 0;
+		for (let index = 0; index < nodes.length; index++) {
+			const node = nodes[index];
+			if (node === undefined) {
+				continue
+			}
+			allNode++;
+		}
+		const height = window.innerHeight;
+		const currentHeight = 15 * allNode;
+		const newHeight = Math.max(currentHeight, height);
+		myChart.resize();
+
+	}, 'json');
+
+	function submitForm() {
+
+	}
+	myChart.on("click", this.treeNodeclick);
+
+	function treeNodeclick(param) {
+		if (param.event.target.culling === true) {
+			if (typeof param.seriesIndex == 'undefined') {
+				return;
+			}
+			if (param.type == 'click') {
+				if (!param.data.hasChild) {
+					if (param.data.collapsed == undefined || param.data.collapsed == true) {
+						console.log("未定義");
+						param.data.collapsed = false;
+					} else {
+						console.log("下次不展開");
+						param.data.collapsed = true;
+					}
+					return;
+				}
+			}
+			return;
+		} else if (param.event.target.culling === false) {
+
+		}
+	}
+
+	$("#main").bind("contextmenu", function () { return false; }); //防止默認右鍵選單彈出
+	var gloab_param = null;
+	myChart.on("contextmenu", function (params) {
+		gloab_param = params;
+		$('#rightMenu').css({
+			'display': 'block',
+			'left': params.event.offsetX + 15,	// 調整右鍵時選單的位置
+			'top': params.event.offsetY - 110
+		});
+	});
+	/**
+	 * 點擊時隱藏右鍵選單
+	 */
+	$('.tree-container').click(function () {
+		$('#rightMenu').css({
+			'display': 'none',
+			'left': '-9999px',
+			'top': '-9999px'
+		});
+	});
+
+	// 難產的編輯功能
+	function editModelNode() {
+		var editData = gloab_param.data;
+	}
+	function addModelNode() {
+		console.log("新增");
+	}
+	function deleteModelNode(deleteType) {
+
+	}
+	function removeByValue(arr, attrKey, attrValue) {
+		var index = 0;
+		for (var i in arr) {
+			if (arr[i][attrKey] == attrValue) {
+				index = i;
+				break;
+			}
+		}
+		arr.splice(index, 1);
+	}
+</script>
+
+</html>
