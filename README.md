@@ -1,3 +1,2 @@
-# Hackthon2022-Demo
-Hackthon2022 by echart
+# Hackthon2022-Demo by echart
 To be organized
