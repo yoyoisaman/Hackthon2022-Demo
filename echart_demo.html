@@ -74,6 +74,8 @@
 	var myChart = echarts.init(chartDom);//
 	var option;
 	var data1;
+    // 添加全局變量
+    let currentNodeData = null;  // 用於保存當前選中的節點數據
 	myChart.showLoading();
 	$.getJSON('flare.json', {}, function (data) {
 		console.log(data);
@@ -198,12 +200,10 @@
 		const currentHeight = 15 * allNode;
 		const newHeight = Math.max(currentHeight, height);
 		myChart.resize();
-
+        setTimeout(updateChartHeight, 100); 
 	}, 'json');
 
-	function submitForm() {
 
-	}
 	myChart.on("click", this.treeNodeclick);
 
 	function treeNodeclick(param) {
@@ -226,17 +226,227 @@
 			return;
 		} 
 	}
+	function editModelNode() {
+		if (!gloab_param || !gloab_param.data) return;
+		
+		currentNodeData = gloab_param.data;
+		console.log("修改前 currentNodeData:", currentNodeData);
+		
+		const newName = prompt("請輸入新的節點名稱:", currentNodeData.name);
+		const newDesc = prompt("請輸入新的描述:", currentNodeData.describes || "");
+		
+		// 在 data1 中找到並更新節點
+		function findAndUpdateNode(node, targetName) {
+			if (node.name === targetName) {
+				if (newName && newName !== node.name) {
+					node.name = newName;
+				}
+				if (newDesc !== null) {
+					node.describes = newDesc;
+				}
+				console.log("找到並更新節點:", node);
+				return true;
+			}
+			if (node.children) {
+				for (let i = 0; i < node.children.length; i++) {
+					if (findAndUpdateNode(node.children[i], targetName)) {
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+		
+		const originalName = currentNodeData.name;
+		findAndUpdateNode(data1, originalName);
+		console.log("修改後 data1:", JSON.stringify(data1, null, 2));
+		
+		// 更新 option 中的數據
+		// deep copy
+		option.series[0].data = [JSON.parse(JSON.stringify(data1))]; 
+		myChart.setOption(option, {
+			notMerge: true, 
+			lazyUpdate: false 
+		});
+		
+		console.log("更新後的 option.series[0].data:", option.series[0].data);
+		$('#rightMenu').hide();
+	}
+    
+
+    // 增加子節點
+    function addModelNode() {
+		if (!gloab_param || !gloab_param.data) return;
+		
+		currentNodeData = gloab_param.data;
+		// console.log("添加前 currentNodeData:", currentNodeData);
+		
+		const newNodeName = prompt("請輸入新子節點名稱:");
+		if (newNodeName) {
+			const newNode = {
+				name: newNodeName,
+				describes: "",
+				level: (currentNodeData.level || 0) + 1,
+				hasChild: false
+			};
+			
+			// 在 data1 中找到對應的節點並添加子節點
+			function findAndAddNode(node, targetName) {
+				if (node.name === targetName) {
+					if (!node.children) {
+						node.children = [];
+						node.hasChild = true;
+						node.collapsed = false;
+					}
+					node.children.push(newNode);
+					console.log("找到並添加子節點後的節點:", node);
+					return true;
+				}
+				if (node.children) {
+					for (let i = 0; i < node.children.length; i++) {
+						if (findAndAddNode(node.children[i], targetName)) {
+							return true;
+						}
+					}
+				}
+				return false;
+			}
+			
+			const originalName = currentNodeData.name;
+			findAndAddNode(data1, originalName);
+			console.log("添加後 data1:", JSON.stringify(data1, null, 2));
+			
+			// 更新 option 中的數據，使用deep copy確保引用改變
+			option.series[0].data = [JSON.parse(JSON.stringify(data1))];
+			myChart.setOption(option, {
+				notMerge: true, // 強制不合併舊配置
+				lazyUpdate: false // 立即更新
+			});
+			
+			console.log("更新後的 option.series[0].data:", option.series[0].data);
+		}
+		$('#rightMenu').hide();
+	}
+
+    function deleteModelNode(type) {
+		if (!gloab_param || !gloab_param.data) return;
+		
+		currentNodeData = gloab_param.data;
+		
+		function findAndRemoveNode(node, targetName, isRoot = false) {
+			// 如果是根節點，直接檢查自身
+			if (isRoot && node.name === targetName) {
+				if (type === '1') {
+					// 不能删除根節點，已在外部檢查
+					return false;
+				} else if (type === '2') {
+					node.children = [];
+					node.hasChild = false;
+					node.collapsed = false;
+					return true;
+				}
+			}
+			
+			// 遍歷子節點
+			if (!node.children) return false;
+			
+			for (let i = 0; i < node.children.length; i++) {
+				if (node.children[i].name === targetName) {
+					if (type === '1') {
+						node.children.splice(i, 1); // 删除當前節點
+						if (node.children.length === 0) {
+							node.hasChild = false;
+							node.collapsed = false;
+						}
+						return true;
+					} else if (type === '2') {
+						node.children[i].children = []; // 删除子節點
+						node.children[i].hasChild = false;
+						node.children[i].collapsed = false;
+						return true;
+					}
+				}
+				if (findAndRemoveNode(node.children[i], targetName)) {
+					return true;
+				}
+			}
+			return false;
+		}
+		
+		if (type === '1' && currentNodeData.name === data1.name) {
+			alert("不能刪除根節點!");
+			return;
+		}
+		
+		if (type === '2' && (!currentNodeData.children || currentNodeData.children.length === 0)) {
+			alert("當前節點沒有子節點!");
+			return;
+		}
+		
+		if (confirm(`確定要${type === '1' ? '刪除當前節點' : '刪除所有子節點'} "${currentNodeData.name}" 嗎?`)) {
+			// 從根節點開始查找，支持删除根節點的子節點
+			const deleted = findAndRemoveNode(data1, currentNodeData.name, true);
+			
+			if (deleted) {
+				// 重置所有節點的狀態
+				function resetCollapsed(node) {
+					if (node.children && node.children.length > 0) {
+						node.hasChild = true;
+						if (typeof node.collapsed === 'undefined') {
+							node.collapsed = true; // 默認收起有子節點的節點
+						}
+						node.children.forEach(resetCollapsed);
+					} else {
+						node.hasChild = false;
+						node.collapsed = false; // 無子節點時不收起
+					}
+				}
+				// resetCollapsed(data1);
+				
+				// 更新圖表
+				option.series[0].data = [data1];
+				myChart.clear()
+				myChart.setOption(option, {
+					notMerge: true, // 強制不合併舊配置
+					lazyUpdate: false // 立即更新
+				});
+				
+				console.log("更新後的數據:", JSON.stringify(data1, null, 2));
+			} else {
+				console.log("未找到目標節點:", currentNodeData.name);
+			}
+		}
+		$('#rightMenu').hide();
+	}
+	
+    // 高度更新函數
+    function updateChartHeight() {
+        const nodes = myChart._chartsViews[0]._data._graphicEls;
+        let allNode = 0;
+        for (let index = 0; index < nodes.length; index++) {
+            if (nodes[index] !== undefined) {
+                allNode++;
+            }
+        }
+        const height = window.innerHeight;
+        const currentHeight = 15 * allNode;
+        const newHeight = Math.max(currentHeight, height);
+        chartDom.style.height = newHeight + 'px';
+        myChart.resize();
+    }
+
 
 	$("#main").bind("contextmenu", function () { return false; }); //防止默認右鍵選單彈出
 	var gloab_param = null;
 	myChart.on("contextmenu", function (params) {
-		gloab_param = params;
-		$('#rightMenu').css({
-			'display': 'block',
-			'left': params.event.offsetX + 15,	// 調整右鍵時選單的位置
-			'top': params.event.offsetY - 110
-		});
-	});
+        gloab_param = params;
+        currentNodeData = params.data;
+        $('#rightMenu').css({
+            'display': 'block',
+            'left': params.event.offsetX + 15,
+            'top': params.event.offsetY - 110
+        });
+    });
 	/**
 	 * 點擊時隱藏右鍵選單
 	 */
@@ -247,6 +457,7 @@
 			'top': '-9999px'
 		});
 	});
+    window.addEventListener('resize', updateChartHeight);
 
 </script>
 
